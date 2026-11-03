@@ -9,7 +9,7 @@ A Spring Boot service that turns long URLs into short links and redirects visito
 - Cache-aside caching in Redis for redirect lookups; cache lifetime never exceeds a link's remaining life
 - Fixed-window rate limiting per client IP, with separate limits for creating links and for redirects (`429` + `Retry-After`)
 - Input validation, RFC 7807 error responses, health endpoint
-- Redis problems never break redirects: cache and rate limiter fail open and fall back to the database
+- Redis problems never break redirects: cache and rate limiter fail open, a small circuit breaker skips Redis for 10 seconds after a failure, and redirects fall back to the database
 - Runs with zero setup (in-memory H2) or as a MySQL + Redis stack with Docker Compose
 
 ## Tech stack
@@ -136,11 +136,11 @@ Health check: `GET /actuator/health`.
 ```bash
 ./mvnw test
 ```
-51 tests:
+55 tests:
 - **Unit tests:** URL validation (rejects `javascript:`, `ftp:`, `file:` and malformed input), code generation, cache entry encoding, the rate limiter (including window rollover with a controllable clock), and `LinkService` with mocks (cache hit skips the database, cache lifetime capped by expiry, expired links are not cached or counted, alias rules).
 - **API tests (MockMvc, H2):** create, redirect, click counting, caching, aliases, validation errors, expiry via a movable clock, analytics, rate limiting and health.
 
-The Redis implementations are covered by running the Docker Compose stack, not by the unit tests.
+The Redis implementations are unit-tested against a failing Redis (fail-open and circuit-breaker behaviour) and were exercised against a real Redis through the Docker Compose stack.
 
 ## Design decisions
 - **302, not 301.** Browsers cache a 301 and stop contacting the server, which would stop click counting and make expiry unenforceable.
